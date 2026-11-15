@@ -104,7 +104,9 @@ jobs:
           git checkout -B "$branch"
           git add package.json package-lock.json CHANGELOG.md
           git commit -m "release: ${VERSION}, tracking cubejs/cube:v${VERSION}"
-          git push --force-with-lease origin "$branch"
+          # The branch is owned by this workflow and rebuilt from main on every run, so a
+          # lease would fail whenever a previous run left it behind.
+          git push --force origin "$branch"
 
           cat > /tmp/pr.md <<EOF
           Tracks \`cubejs/cube:v${VERSION}\`.
