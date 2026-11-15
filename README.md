@@ -3,9 +3,12 @@
 Prometheus metrics and NDJSON logs for a self-hosted **Cube (OSS)** deployment, using
 Cube's public `logger` config option.
 
-Source of truth: [benyaminsalimi/cube-observability](https://github.com/benyaminsalimi/cube-observability)
-(`packages/cube-prometheus`). This repository is a mirror for consumers of the npm package;
-changes land in the monorepo and are published here with `git subtree push`.
+This repository is the **source of truth** for the npm package. The umbrella repository
+[benyaminsalimi/cube-observability](https://github.com/benyaminsalimi/cube-observability)
+consumes it as a git submodule at `packages/cube-prometheus` and installs the published
+tarball for its image builds.
+
+## Install
 
 ```bash
 npm install @cube_oss/cube-prometheus
@@ -59,7 +62,21 @@ app.get('/metrics', exporter.handler);   // or exporter.listen(9464)
 
 `CreateOptions.logger`, `cube.js` loading, the `<uuid>-span-N` request id format, and a set
 of logger event names. All of them live in `src/contract.js` and are verified against a Cube
-checkout by `make test-contract` in the repository root. When Cube renames an event, that
+checkout by the umbrella repository's `make test-contract`. When Cube renames an event, that
 check fails — the metric contract does not silently rot.
 
-Full metric reference: `docs/metrics.md` in the repository.
+## Tests
+
+```bash
+npm install
+npm test
+```
+
+## Publishing
+
+```bash
+npm publish --access public
+```
+
+Then bump the submodule pointer in `cube-observability`, which is the only place the
+consumers read the package from.
