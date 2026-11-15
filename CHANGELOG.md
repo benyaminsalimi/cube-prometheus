@@ -1,7 +1,7 @@
 # Changelog
 
 The version of this package mirrors the Cube release it is verified against:
-`@cube_oss/cube-prometheus@X.Y.Z` is tested against `cubejs/cube:vX.Y.Z`. There are no
+`cube-prometheus@X.Y.Z` is tested against `cubejs/cube:vX.Y.Z`. There are no
 independent minor or patch releases — a fix that must ship between Cube releases still
 needs a Cube version to track, so patch releases use the Cube version plus a build
 metadata suffix at most.

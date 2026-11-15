@@ -3,7 +3,7 @@ name: publish
 # Releases are cut from this repository only.
 #
 # Version policy: the npm version mirrors the Cube release the package is verified against
-# (cubejs/cube:v1.8.25 -> @cube_oss/cube-prometheus@1.8.25). The tag, package.json and the
+# (cubejs/cube:v1.8.25 -> cube-prometheus@1.8.25). The tag, package.json and the
 # Cube release must agree, and the event-name contract must hold against that exact Cube
 # tag, before anything reaches the registry.
 #
@@ -90,7 +90,7 @@ jobs:
         run: |
           npm pack --dry-run
           npm pack
-          tar -tzf "cube_oss-cube-prometheus-${VERSION}.tgz" | sort > /tmp/tarball.txt || true
+          tar -tzf "cube-prometheus-${VERSION}.tgz" | sort > /tmp/tarball.txt || true
           cat /tmp/tarball.txt 2>/dev/null || true
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -101,7 +101,7 @@ jobs:
           set -eu
           v="${{ steps.version.outputs.version }}"
           code="$(curl -s -o /dev/null -w '%{http_code}' \
-            "https://registry.npmjs.org/@cube_oss%2Fcube-prometheus/${v}")"
+            "https://registry.npmjs.org/cube-prometheus/${v}")"
           echo "npm ${v} -> HTTP ${code}"
           if [ "$code" = "200" ]; then
             echo "already published; publish steps will be skipped"
@@ -128,8 +128,8 @@ jobs:
           set -eu
           v="${{ steps.version.outputs.version }}"
           for attempt in 1 2 3 4 5; do
-            if curl -fsS "https://registry.npmjs.org/@cube_oss%2Fcube-prometheus/${v}" >/dev/null; then
-              echo "@cube_oss/cube-prometheus@${v} is live"
+            if curl -fsS "https://registry.npmjs.org/cube-prometheus/${v}" >/dev/null; then
+              echo "cube-prometheus@${v} is live"
               exit 0
             fi
             sleep 5

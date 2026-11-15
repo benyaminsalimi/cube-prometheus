@@ -1,7 +1,14 @@
-# @cube_oss/cube-prometheus
+# cube-prometheus
 
 Prometheus metrics and NDJSON logs for a self-hosted **Cube (OSS)** deployment, using
 Cube's public `logger` config option.
+
+> **Unofficial.** This project is not affiliated with, endorsed by, or maintained by Cube Dev,
+> Inc. or the [cube-js/cube](https://github.com/cube-js/cube) project. It is a third-party
+> exporter that uses Cube's public `logger` configuration hook and reads only its log events.
+> Upstream Cube — the open-source semantic layer this instruments — lives at
+> <https://github.com/cube-js/cube>.
+
 
 This repository is the **source of truth** for the npm package. The umbrella repository
 [benyaminsalimi/cube-observability](https://github.com/benyaminsalimi/cube-observability)
@@ -10,13 +17,14 @@ tarball for its image builds.
 
 ## Versions
 
-The npm version **mirrors the Cube release this package is verified against**: Cube
-`v1.8.25` → `@cube_oss/cube-prometheus@1.8.25`. Pin the same number as your
-`cubejs/cube` image tag (minus the `v`):
+The npm version **mirrors the Cube release this package is verified against**: upstream
+Cube `v1.8.26` → `cube-prometheus@1.8.26` (from
+<https://github.com/cube-js/cube/releases>). Pin the same number as your `cubejs/cube`
+image tag, minus the `v`:
 
 ```bash
-docker pull cubejs/cube:v1.8.25
-npm install @cube_oss/cube-prometheus@1.8.25
+docker pull cubejs/cube:v1.8.26
+npm install cube-prometheus@1.8.26
 ```
 
 There is no separate version line and no back-filling of older Cube releases — each
@@ -27,12 +35,12 @@ the tag and `package.json` disagree.
 ## Install
 
 ```bash
-npm install @cube_oss/cube-prometheus
+npm install cube-prometheus
 ```
 
 ```js
 // cube.js
-module.exports = require('@cube_oss/cube-prometheus').withMetrics({ ...yourConfig });
+module.exports = require('cube-prometheus').withMetrics({ ...yourConfig });
 ```
 
 ```bash
@@ -50,7 +58,7 @@ curl -s localhost:9464/metrics | grep '^cube_requests_total'
 ## Versioning
 
 The package version mirrors the Cube release it is verified against:
-`@cube_oss/cube-prometheus@1.8.25` is tested against `cubejs/cube:v1.8.25`. There are no
+`cube-prometheus@1.8.26` is tested against upstream `cubejs/cube:v1.8.26`. There are no
 independent minor releases; publishing a fix means tracking the Cube version it targets.
 The publish workflow enforces it: the git tag must equal `package.json`, the version must
 be a real `cubejs/cube` tag, and the event-name contract must hold against that exact tag
@@ -72,7 +80,7 @@ before anything reaches the registry.
 Fine-grained use:
 
 ```js
-const { create } = require('@cube_oss/cube-prometheus');
+const { create } = require('cube-prometheus');
 const exporter = create({ port: 0 });
 
 const server = new CubejsServer({ ...config, logger: exporter.logger });
