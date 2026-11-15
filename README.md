@@ -90,6 +90,29 @@ of logger event names. All of them live in `src/contract.js` and are verified ag
 checkout by the umbrella repository's `make test-contract`. When Cube renames an event, that
 check fails — the metric contract does not silently rot.
 
+## Releasing
+
+Tagging is the release:
+
+```bash
+npm version --no-git-tag-version 1.8.25   # or the Cube release you verified
+git commit -am "release: 1.8.25"
+git tag v1.8.25 && git push origin main --tags
+```
+
+`.github/workflows/publish.yml` then enforces, in order: unit tests, tag == `package.json`,
+the version is a real `cubejs/cube` tag, the event-name contract holds against **that
+exact tag**, the tarball packs, and the version is not already on the registry. Only then
+does it publish with provenance and create the GitHub release.
+
+Authentication is npm **trusted publishing** (OIDC) — no token and no 2FA prompt. Configure
+it once in the npm package settings: Trusted Publisher → `benyaminsalimi/cube-prometheus`,
+workflow `publish.yml`. If a granular `NPM_TOKEN` secret with "Bypass 2FA" is present, the
+workflow uses it instead.
+
+`detect-cube-release.yml` runs daily and opens a pull request when a newer Cube release
+exists, so the only manual step is reviewing and merging it.
+
 ## Tests
 
 ```bash

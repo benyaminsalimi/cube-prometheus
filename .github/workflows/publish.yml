@@ -1,14 +1,16 @@
 name: publish
 
-# The package is released from this repository only. The umbrella repository
-# (benyaminsalimi/cube-observability) consumes it as a submodule and pulls the
-# published tarball; it never publishes on this repository's behalf.
+# Releases are cut from this repository only.
 #
-# Version policy: the npm version mirrors the Cube release the package is
-# verified against (Cube v1.8.25 -> @cube_oss/cube-prometheus@1.8.25). The tag,
-# the package.json version and the Cube release are checked to agree before
-# anything is pushed to the registry. No historical versions are back-filled --
-# the first release is the one in package.json.
+# Version policy: the npm version mirrors the Cube release the package is verified against
+# (cubejs/cube:v1.8.25 -> @cube_oss/cube-prometheus@1.8.25). The tag, package.json and the
+# Cube release must agree, and the event-name contract must hold against that exact Cube
+# tag, before anything reaches the registry.
+#
+# Authentication: npm trusted publishing (OIDC) is preferred — no token, no 2FA prompt,
+# provenance attached automatically. Configure it once in the npm package settings
+# (Trusted Publisher: benyaminsalimi/cube-prometheus, workflow publish.yml). A granular
+# NPM_TOKEN with "Bypass 2FA" is used only if that secret exists.
 
 on:
   push:
@@ -17,46 +19,58 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Build and pack, but do not publish"
+        description: "Run every check, pack, but do not publish or release"
         type: boolean
-        default: false
+        default: true
 
 permissions:
-  contents: read
-  id-token: write # npm provenance
+  contents: write # GitHub release
+  id-token: write # npm provenance / trusted publishing
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN_SET: ${{ secrets.NPM_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: https://registry.npmjs.org
 
       - run: npm ci --no-audit --no-fund
 
       - name: Unit tests
         run: npm test
 
-      - name: Check the tag agrees with package.json
-        if: github.event_name == 'push'
+      - name: Resolve the version under release
+        id: version
         run: |
           set -eu
-          pkg="$(node -p "require('./package.json').version")"
-          tag="${GITHUB_REF_NAME#v}"
-          echo "tag=$tag  package.json=$pkg"
-          if [ "$tag" != "$pkg" ]; then
-            echo "::error::tag v$tag does not match package.json version $pkg"
-            exit 1
+          v="$(node -p "require('./package.json').version")"
+          echo "version=${v}" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${GITHUB_REF_NAME#v}"
+            echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+            if [ "$tag" != "$v" ]; then
+              echo "::error::tag v${tag} does not match package.json version ${v}"
+              exit 1
+            fi
           fi
+          echo "releasing ${v}"
 
       - name: The version must be a real Cube release
         run: |
           set -eu
-          v="$(node -p "require('./package.json').version")"
+          v="${{ steps.version.outputs.version }}"
           code="$(curl -s -o /dev/null -w '%{http_code}' \
             "https://hub.docker.com/v2/repositories/cubejs/cube/tags/v${v}")"
           echo "cubejs/cube:v${v} -> HTTP ${code}"
@@ -65,18 +79,74 @@ jobs:
             exit 1
           fi
 
-      - name: Contract against the Cube release this version claims
+      - name: Contract against that exact Cube release
         run: |
           set -eu
-          v="$(node -p "require('./package.json').version")"
+          v="${{ steps.version.outputs.version }}"
           git clone --depth 1 --branch "v${v}" https://github.com/cube-js/cube.git /tmp/cube
           npm run contract -- --cube /tmp/cube
 
       - name: Pack
-        run: npm pack --dry-run
+        run: |
+          npm pack --dry-run
+          npm pack
+          tar -tzf "cube_oss-cube-prometheus-${VERSION}.tgz" | sort > /tmp/tarball.txt || true
+          cat /tmp/tarball.txt 2>/dev/null || true
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
 
-      - name: Publish
-        if: github.event_name == 'push' || inputs.dry_run != true
+      - name: Refuse to overwrite a published version
+        run: |
+          set -eu
+          v="${{ steps.version.outputs.version }}"
+          code="$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://registry.npmjs.org/@cube_oss%2Fcube-prometheus/${v}")"
+          echo "npm ${v} -> HTTP ${code}"
+          if [ "$code" = "200" ]; then
+            echo "::error::@cube_oss/cube-prometheus@${v} is already published; bump the version instead"
+            exit 1
+          fi
+
+      - name: Publish via trusted publishing (OIDC)
+        if: env.DRY_RUN != 'true' && env.NPM_TOKEN_SET != 'true'
         run: npm publish --provenance --access public
+
+      - name: Publish with NPM_TOKEN
+        if: env.DRY_RUN != 'true' && env.NPM_TOKEN_SET == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          printf '//registry.npmjs.org/:_authToken=%s\n' "$NODE_AUTH_TOKEN" > "$HOME/.npmrc"
+          npm publish --provenance --access public
+
+      - name: Confirm the registry has it
+        if: env.DRY_RUN != 'true'
+        run: |
+          set -eu
+          v="${{ steps.version.outputs.version }}"
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS "https://registry.npmjs.org/@cube_oss%2Fcube-prometheus/${v}" >/dev/null; then
+              echo "@cube_oss/cube-prometheus@${v} is live"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::published but the registry does not serve ${v} yet"
+          exit 1
+
+      - name: GitHub release
+        if: env.DRY_RUN != 'true' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          v="${{ steps.version.outputs.version }}"
+          awk -v ver="## [${v}]" '
+            index($0, ver) { printing = 1 }
+            printing && index($0, "## [") && !index($0, ver) { exit }
+            printing { print }
+          ' CHANGELOG.md > /tmp/release-notes.md
+          gh release create "v${v}" \
+            --title "v${v} — tracks cubejs/cube:v${v}" \
+            --notes-file /tmp/release-notes.md \
+            --verify-tag

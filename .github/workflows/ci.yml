@@ -1,0 +1,37 @@
+name: ci
+
+# Every push and pull request: unit tests plus the event-name contract, verified against
+# the exact Cube release the package version claims. Cheap enough to run on everything.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Contract against the Cube release this version claims
+        run: |
+          set -eu
+          v="$(node -p "require('./package.json').version")"
+          git clone --depth 1 --branch "v${v}" https://github.com/cube-js/cube.git /tmp/cube
+          npm run contract -- --cube /tmp/cube
+
+      - name: The package packs
+        run: npm pack --dry-run

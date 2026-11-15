@@ -1,0 +1,126 @@
+name: detect cube release
+
+# Finds a newer Cube release than the package version and opens a release pull request.
+# Nothing is published here: the PR must pass CI, the umbrella repository must pass its
+# end-to-end and Grafana checks on the bumped submodule, and only then is a tag pushed.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: detect-cube-release
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Compare with the latest Cube release
+        id: compare
+        run: |
+          set -eu
+          latest="$(curl -fsS 'https://hub.docker.com/v2/repositories/cubejs/cube/tags?page_size=100&ordering=last_updated' \
+            | node -e '
+              let raw = "";
+              process.stdin.on("data", (chunk) => { raw += chunk; });
+              process.stdin.on("end", () => {
+                const tags = JSON.parse(raw).results
+                  .map((result) => result.name)
+                  .filter((name) => /^v\d+\.\d+\.\d+$/.test(name))
+                  .map((name) => name.slice(1));
+                tags.sort((a, b) => {
+                  const pa = a.split(".").map(Number);
+                  const pb = b.split(".").map(Number);
+                  return pb[0] - pa[0] || pb[1] - pa[1] || pb[2] - pa[2];
+                });
+                process.stdout.write(tags[0] || "");
+              });
+            ')"
+
+          current="$(node -p "require('./package.json').version")"
+          echo "latest=${latest} current=${current}"
+
+          if [ -z "$latest" ]; then
+            echo "::error::could not determine the latest Cube release"
+            exit 1
+          fi
+
+          newer="$(printf '%s\n%s\n' "$current" "$latest" | sort -V | tail -1)"
+          if [ "$newer" = "$current" ]; then
+            echo "already on the newest Cube release"
+            echo "update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "update=true" >> "$GITHUB_OUTPUT"
+          echo "version=${latest}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump the version
+        if: steps.compare.outputs.update == 'true'
+        env:
+          VERSION: ${{ steps.compare.outputs.version }}
+        run: |
+          set -eu
+          node -e '
+            const fs = require("fs");
+            const version = process.env.VERSION;
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            pkg.version = version;
+            fs.writeFileSync("package.json", `${JSON.stringify(pkg, null, 2)}\n`);
+            console.log(`package.json -> ${version}`);
+          '
+          npm install --package-lock-only --no-audit --no-fund
+          node -e '
+            const fs = require("fs");
+            const version = process.env.VERSION;
+            const path = "CHANGELOG.md";
+            const text = fs.readFileSync(path, "utf8");
+            if (text.includes(`## [${version}]`)) process.exit(0);
+            const entry = `## [${version}] — ${new Date().toISOString().slice(0, 10)}\n\n- Tracks Cube v${version}.\n\n`;
+            fs.writeFileSync(path, text.replace("## [", `${entry}## [`));
+          '
+
+      - name: Open or update the release pull request
+        if: steps.compare.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.compare.outputs.version }}
+        run: |
+          set -eu
+          branch="release/cube-${VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add package.json package-lock.json CHANGELOG.md
+          git commit -m "release: ${VERSION}, tracking cubejs/cube:v${VERSION}"
+          git push --force-with-lease origin "$branch"
+
+          cat > /tmp/pr.md <<EOF
+          Tracks \`cubejs/cube:v${VERSION}\`.
+
+          Before this can be tagged, the following must be green:
+
+          - CI on this pull request: unit tests, the event-name contract against
+            \`cubejs/cube:v${VERSION}\`, and \`npm pack\`.
+          - The umbrella repository's CI after the submodule bump: end-to-end against a real
+            Cube and Postgres, plus every dashboard panel queried through Grafana.
+          - \`make test-contract CUBE_REPO=<cube @ v${VERSION}>\` locally if the event vocabulary moved.
+          EOF
+
+          if gh pr view "$branch" >/dev/null 2>&1; then
+            gh pr edit "$branch" --body-file /tmp/pr.md
+          else
+            gh pr create --base main --head "$branch" \
+              --title "release: ${VERSION}" --body-file /tmp/pr.md
+          fi
