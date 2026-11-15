@@ -21,7 +21,12 @@ jobs:
   detect:
     runs-on: ubuntu-latest
     steps:
+      # A PAT here means the branch push triggers normal CI on the pull request.
+      # With the default token, GitHub suppresses those runs, which is why the gates
+      # below are executed in this job as well.
       - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v7
         with:
@@ -91,10 +96,22 @@ jobs:
             fs.writeFileSync(path, text.replace("## [", `${entry}## [`));
           '
 
+      - name: Verify the candidate before opening a pull request
+        if: steps.compare.outputs.update == 'true'
+        env:
+          VERSION: ${{ steps.compare.outputs.version }}
+        run: |
+          set -eu
+          npm ci --no-audit --no-fund
+          npm test
+          git clone --depth 1 --branch "v${VERSION}" https://github.com/cube-js/cube.git /tmp/cube
+          npm run contract -- --cube /tmp/cube
+          npm pack --dry-run
+
       - name: Open or update the release pull request
         if: steps.compare.outputs.update == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.compare.outputs.version }}
         run: |
           set -eu
@@ -111,13 +128,19 @@ jobs:
           cat > /tmp/pr.md <<EOF
           Tracks \`cubejs/cube:v${VERSION}\`.
 
-          Before this can be tagged, the following must be green:
+          Verified in the workflow run that opened this pull request:
 
-          - CI on this pull request: unit tests, the event-name contract against
-            \`cubejs/cube:v${VERSION}\`, and \`npm pack\`.
-          - The umbrella repository's CI after the submodule bump: end-to-end against a real
-            Cube and Postgres, plus every dashboard panel queried through Grafana.
-          - \`make test-contract CUBE_REPO=<cube @ v${VERSION}>\` locally if the event vocabulary moved.
+          - unit tests
+          - the event-name contract against \`cubejs/cube:v${VERSION}\`
+          - \`npm pack --dry-run\`
+
+          Before tagging, the umbrella repository must also be green after the submodule
+          bump: end-to-end against a real Cube and Postgres, plus every dashboard panel
+          queried through Grafana.
+
+          Note: pull requests opened with the default \`GITHUB_TOKEN\` do not trigger CI.
+          Add a \`RELEASE_TOKEN\` secret (a PAT with \`repo\` scope) to make this branch behave
+          like any other.
           EOF
 
           if gh pr view "$branch" >/dev/null 2>&1; then
