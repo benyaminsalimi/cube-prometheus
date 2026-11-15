@@ -1,7 +1,15 @@
-# cube-prometheus
+# @cube_oss/cube-prometheus
 
 Prometheus metrics and NDJSON logs for a self-hosted **Cube (OSS)** deployment, using
 Cube's public `logger` config option.
+
+Source of truth: [benyaminsalimi/cube-observability](https://github.com/benyaminsalimi/cube-observability)
+(`packages/cube-prometheus`). This repository is a mirror for consumers of the npm package;
+changes land in the monorepo and are published here with `git subtree push`.
+
+```bash
+npm install @cube_oss/cube-prometheus
+```
 
 ```js
 // cube.js
