@@ -8,6 +8,10 @@
   "types": "src/index.d.ts",
   "files": [
     "src",
+    "tools",
+    "LICENSE",
+    "CHANGELOG.md",
+    "SECURITY.md",
     "README.md"
   ],
   "engines": {
@@ -21,7 +25,8 @@
     "observability"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "contract": "node tools/contract-check.mjs"
   },
   "dependencies": {
     "prom-client": "15.1.3"
@@ -36,5 +41,16 @@
   "homepage": "https://github.com/benyaminsalimi/cube-prometheus#readme",
   "bugs": {
     "url": "https://github.com/benyaminsalimi/cube-prometheus/issues"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "require": "./src/index.js",
+      "default": "./src/index.js"
+    },
+    "./catalog": "./src/catalog.js",
+    "./contract": "./src/contract.js",
+    "./package.json": "./package.json"
   }
 }

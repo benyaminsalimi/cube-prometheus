@@ -47,6 +47,15 @@ curl -s localhost:9464/metrics | grep '^cube_requests_total'
 - Logs: one JSON object per line (pino/bunyan fields) with `trace_id`, which also appears in
   the SQL Cube sends to the warehouse.
 
+## Versioning
+
+The package version mirrors the Cube release it is verified against:
+`@cube_oss/cube-prometheus@1.8.25` is tested against `cubejs/cube:v1.8.25`. There are no
+independent minor releases; publishing a fix means tracking the Cube version it targets.
+The publish workflow enforces it: the git tag must equal `package.json`, the version must
+be a real `cubejs/cube` tag, and the event-name contract must hold against that exact tag
+before anything reaches the registry.
+
 ## Options
 
 | Option | Env | Default |
