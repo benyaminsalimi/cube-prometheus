@@ -95,7 +95,8 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
 
-      - name: Refuse to overwrite a published version
+      - name: Is this version already published?
+        id: registry
         run: |
           set -eu
           v="${{ steps.version.outputs.version }}"
@@ -103,16 +104,18 @@ jobs:
             "https://registry.npmjs.org/@cube_oss%2Fcube-prometheus/${v}")"
           echo "npm ${v} -> HTTP ${code}"
           if [ "$code" = "200" ]; then
-            echo "::error::@cube_oss/cube-prometheus@${v} is already published; bump the version instead"
-            exit 1
+            echo "already published; publish steps will be skipped"
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Publish via trusted publishing (OIDC)
-        if: env.DRY_RUN != 'true' && env.NPM_TOKEN_SET != 'true'
+        if: env.DRY_RUN != 'true' && env.NPM_TOKEN_SET != 'true' && steps.registry.outputs.published != 'true'
         run: npm publish --provenance --access public
 
       - name: Publish with NPM_TOKEN
-        if: env.DRY_RUN != 'true' && env.NPM_TOKEN_SET == 'true'
+        if: env.DRY_RUN != 'true' && env.NPM_TOKEN_SET == 'true' && steps.registry.outputs.published != 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -134,8 +137,20 @@ jobs:
           echo "::error::published but the registry does not serve ${v} yet"
           exit 1
 
+      - name: Tag the release
+        if: env.DRY_RUN != 'true'
+        run: |
+          set -eu
+          v="${{ steps.version.outputs.version }}"
+          if git rev-parse "v${v}" >/dev/null 2>&1; then
+            echo "tag v${v} already exists"
+          else
+            git tag "v${v}"
+            git push origin "v${v}"
+          fi
+
       - name: GitHub release
-        if: env.DRY_RUN != 'true' && github.event_name == 'push'
+        if: env.DRY_RUN != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

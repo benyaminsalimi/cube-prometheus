@@ -145,7 +145,50 @@ jobs:
 
           if gh pr view "$branch" >/dev/null 2>&1; then
             gh pr edit "$branch" --body-file /tmp/pr.md
+            echo "updated pull request for ${branch}"
           else
             gh pr create --base main --head "$branch" \
               --title "release: ${VERSION}" --body-file /tmp/pr.md
+            echo "opened pull request for ${branch}"
           fi
+
+      - name: Merge the verified candidate
+        if: steps.compare.outputs.update == 'true' && vars.AUTO_RELEASE != 'false'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.compare.outputs.version }}
+        run: |
+          set -eu
+          branch="release/cube-${VERSION}"
+
+          # Only ever auto-merge the mechanical bump. If the branch carries anything else,
+          # a human looks at it instead.
+          git fetch --quiet origin main
+          changed="$(git diff --name-only "origin/main...HEAD" | sort)"
+          echo "changed files:"$'\n'"${changed}"
+          unexpected="$(printf '%s\n' "$changed" | grep -vE '^(package\.json|package-lock\.json|CHANGELOG\.md)$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "::error::refusing to auto-merge: unexpected files in the release branch"
+            echo "$unexpected"
+            exit 1
+          fi
+
+          gh pr merge "$branch" --squash --delete-branch
+          echo "merged ${branch}"
+
+      - name: Dispatch the publish workflow
+        if: steps.compare.outputs.update == 'true' && vars.AUTO_PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          # A tag pushed with the default GITHUB_TOKEN does not trigger a workflow run, so
+          # the release is dispatched explicitly. publish.yml creates the tag and the
+          # GitHub release once the registry serves the version.
+          gh workflow run publish.yml --repo "$GITHUB_REPOSITORY" --ref main -f dry_run=false
+          echo "publish dispatched"
+
+      - name: Note when auto-release is disabled
+        if: steps.compare.outputs.update == 'true' && vars.AUTO_RELEASE == 'false'
+        run: echo "AUTO_RELEASE is false — pull request left open for review"
+
