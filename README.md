@@ -8,6 +8,22 @@ This repository is the **source of truth** for the npm package. The umbrella rep
 consumes it as a git submodule at `packages/cube-prometheus` and installs the published
 tarball for its image builds.
 
+## Versions
+
+The npm version **mirrors the Cube release this package is verified against**: Cube
+`v1.8.25` → `@cube_oss/cube-prometheus@1.8.25`. Pin the same number as your
+`cubejs/cube` image tag (minus the `v`):
+
+```bash
+docker pull cubejs/cube:v1.8.25
+npm install @cube_oss/cube-prometheus@1.8.25
+```
+
+There is no separate version line and no back-filling of older Cube releases — each
+Cube upgrade publishes the matching package version. Releases are cut from this
+repository by pushing a `v<version>` tag; the `publish` workflow refuses to run when
+the tag and `package.json` disagree.
+
 ## Install
 
 ```bash

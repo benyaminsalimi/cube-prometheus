@@ -1,0 +1,75 @@
+name: publish
+
+# The package is released from this repository only. The umbrella repository
+# (benyaminsalimi/cube-observability) consumes it as a submodule and pulls the
+# published tarball; it never publishes on this repository's behalf.
+#
+# Version policy: the npm version mirrors the Cube release the package is
+# verified against (Cube v1.8.25 -> @cube_oss/cube-prometheus@1.8.25). The tag,
+# the package.json version and the Cube release are checked to agree before
+# anything is pushed to the registry. No historical versions are back-filled --
+# the first release is the one in package.json.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and pack, but do not publish"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Check the tag agrees with package.json
+        if: github.event_name == 'push'
+        run: |
+          set -eu
+          pkg="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF_NAME#v}"
+          echo "tag=$tag  package.json=$pkg"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag v$tag does not match package.json version $pkg"
+            exit 1
+          fi
+
+      - name: The version must be a real Cube release
+        run: |
+          set -eu
+          v="$(node -p "require('./package.json').version")"
+          code="$(curl -s -o /dev/null -w '%{http_code}' \
+            "https://hub.docker.com/v2/repositories/cubejs/cube/tags/v${v}")"
+          echo "cubejs/cube:v${v} -> HTTP ${code}"
+          if [ "$code" != "200" ]; then
+            echo "::error::cubejs/cube:v${v} does not exist; the package version must track a Cube release"
+            exit 1
+          fi
+
+      - name: Pack
+        run: npm pack --dry-run
+
+      - name: Publish
+        if: github.event_name == 'push' || inputs.dry_run != true
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

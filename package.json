@@ -1,6 +1,6 @@
 {
   "name": "@cube_oss/cube-prometheus",
-  "version": "0.1.0",
+  "version": "1.8.25",
   "description": "Prometheus metrics and structured logs for a self-hosted Cube (OSS) deployment, using Cube's public logger hook",
   "license": "Apache-2.0",
   "author": "cube_observability",
@@ -21,8 +21,7 @@
     "observability"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js",
-    "contract": "node ../../tools/contract-check.mjs"
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "prom-client": "15.1.3"
