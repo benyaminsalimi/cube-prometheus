@@ -8,11 +8,22 @@ metadata suffix at most.
 
 ## [1.8.26] — 2026-11-15
 
-- Tracks Cube v1.8.26.
+First published release. Tracks upstream Cube `v1.8.26`
+(<https://github.com/cube-js/cube>).
+
+- Prometheus metrics via Cube's public `logger` hook: request rate, latency percentiles,
+  errors, in-flight requests, cache outcomes, queue wait, pre-aggregation coverage and
+  build time, data source query time, SQL generation time, build info.
+- NDJSON log records (pino/bunyan fields) carrying `trace_id` — the same id Cube puts in
+  the SQL comment sent to the warehouse.
+- Drift detection: `cube_telemetry_unmapped_events_total` plus `tools/contract-check.mjs`,
+  which verifies every Cube assumption against the exact release this version claims.
+- Contract verified against `cubejs/cube:v1.8.26`; no event changes between 1.8.25 and
+  1.8.26.
 
 ## [1.8.25] — 2026-11-15
 
-First release.
+Tagged, never published; superseded by 1.8.26.
 
 - Prometheus metrics from Cube's `CreateOptions.logger` hook: request rate, latency
   percentiles, errors, in-flight requests, cache outcomes, queue wait, pre-aggregation
