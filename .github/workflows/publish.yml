@@ -46,6 +46,13 @@ jobs:
         with:
           node-version: 20
 
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; Node 20 still bundles npm 10.x,
+      # which ignores the OIDC exchange entirely and fails with ENEEDAUTH.
+      - name: npm that understands OIDC
+        run: |
+          npm install -g npm@latest
+          npm --version
+
       - run: npm ci --no-audit --no-fund
 
       - name: Unit tests
