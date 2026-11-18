@@ -12,6 +12,9 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # Required to dispatch publish.yml after merging: `gh workflow run` is an Actions API
+  # call, and without this the merge succeeds and the release silently never publishes.
+  actions: write
 
 concurrency:
   group: detect-cube-release
