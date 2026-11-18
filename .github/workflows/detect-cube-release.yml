@@ -74,6 +74,37 @@ jobs:
           echo "update=true" >> "$GITHUB_OUTPUT"
           echo "version=${latest}" >> "$GITHUB_OUTPUT"
 
+      - name: The merged version is actually published
+        id: registry
+        run: |
+          set -eu
+          v="$(node -p "require('./package.json').version")"
+          code="$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/cube-prometheus/${v}")"
+          echo "npm cube-prometheus@${v} -> HTTP ${code}"
+          if [ "$code" = "200" ]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::main is at ${v} but the registry does not serve it"
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A release can merge and then fail to publish (a permissions error in the dispatch,
+      # a transient npm failure). Nothing else notices: the next day's run sees the version
+      # already matching the newest Cube release and reports success. So reconcile here.
+      - name: Recover a stranded release
+        if: steps.registry.outputs.published == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          if [ "${{ vars.AUTO_PUBLISH }}" = "true" ]; then
+            echo "re-dispatching publish.yml for the unpublished version"
+            gh workflow run publish.yml --repo "$GITHUB_REPOSITORY" --ref main -f dry_run=false
+            exit 0
+          fi
+          echo "::error::AUTO_PUBLISH is not true; publish the missing version manually"
+          exit 1
+
       - name: Bump the version
         if: steps.compare.outputs.update == 'true'
         env:
