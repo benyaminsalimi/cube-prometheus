@@ -6,6 +6,10 @@ independent minor or patch releases — a fix that must ship between Cube releas
 needs a Cube version to track, so patch releases use the Cube version plus a build
 metadata suffix at most.
 
+## [1.8.28] — 2026-11-19
+
+- Tracks Cube v1.8.28.
+
 ## [1.8.27] — 2026-11-17
 
 - Tracks Cube v1.8.27.
