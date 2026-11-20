@@ -1,6 +1,6 @@
 {
   "name": "cube-prometheus",
-  "version": "1.8.28",
+  "version": "1.8.30",
   "description": "Prometheus metrics and structured logs for a self-hosted Cube (OSS) deployment, using Cube's public logger hook",
   "license": "Apache-2.0",
   "author": "cube_observability",
